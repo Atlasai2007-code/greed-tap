@@ -293,9 +293,9 @@
     const LEFT_WALL = 70;
     const RIGHT_WALL = W - 70;
     const PLAYER_R = 18;
-    const GRAVITY = 1040;
-    const HORIZONTAL_SPEED = 305;
-    const BOUNCE_LIFT = -145;
+    const GRAVITY = 720;
+    const HORIZONTAL_SPEED = 250;
+    const BOUNCE_LIFT = -190;
     const SEGMENT_HEIGHT = 185;
     const START_SAFE_TIME = 2.2;
 
@@ -318,9 +318,9 @@
     function resetGame() {
       player = {
         x: W / 2,
-        y: 190,
+        y: 170,
         vx: HORIZONTAL_SPEED,
-        vy: 60,
+        vy: 10,
         alive: true,
         pulse: 0,
       };
@@ -459,7 +459,7 @@
         player.vx = -HORIZONTAL_SPEED;
       }
 
-      const followTarget = 260;
+      const followTarget = 220;
       if (player.y > followTarget) {
         const shift = player.y - followTarget;
         player.y = followTarget;
@@ -472,7 +472,7 @@
       cleanupObjects();
       updateHud();
 
-      if (player.y < -120) player.vy = 60;
+      if (player.y < -120) player.vy = 20;
       if (worldY > 2600) multiplier += 0.002;
     }
 
@@ -665,7 +665,7 @@
     function bounce(direction) {
       if (state !== 'playing') return;
       player.vx = direction === 'left' ? -HORIZONTAL_SPEED : HORIZONTAL_SPEED;
-      player.vy = Math.min(player.vy, 420) + BOUNCE_LIFT;
+      player.vy = Math.min(player.vy, 280) + BOUNCE_LIFT;
     }
 
     function cashOut() {
