@@ -314,6 +314,8 @@
     let depth;
     let bestBanked = Number(localStorage.getItem('greedtap-banked') || 0);
     let spawnShield = 0;
+    let scoreFloaters = [];
+    let lastDepthScoreMark = 0;
 
     function resetGame() {
       player = {
@@ -332,6 +334,8 @@
       multiplier = 1;
       depth = 0;
       spawnShield = START_SAFE_TIME;
+      scoreFloaters = [];
+      lastDepthScoreMark = 0;
       state = 'playing';
       overlayTitle.textContent = 'Learn the loop';
       overlayText.textContent = 'Yellow = points. Purple = multiplier. Green = bank. Red = death.';
@@ -467,8 +471,10 @@
       }
 
       depth = Math.floor(worldY / 10);
+      awardDepthScore();
       ensureSegments(worldY + H + 700);
       updateObjects();
+      updateFloaters(dt);
       cleanupObjects();
       updateHud();
 
@@ -483,8 +489,10 @@
         if (obj.type === 'coin' && !obj.taken) {
           if (distance(player.x, player.y, obj.x, sy) <= PLAYER_R + obj.r) {
             obj.taken = true;
-            runScore += Math.round(12 * multiplier);
-            flashOverlay(`+${Math.round(12 * multiplier)}`, 'Coin');
+            const gain = Math.round(20 * multiplier);
+            runScore += gain;
+            addFloater(`+${gain}`, obj.x, sy, '#fbbf24');
+            flashOverlay(`+${gain} points`, 'Coin');
           }
         }
 
@@ -499,11 +507,33 @@
           if (rectCircleHit(obj.x - obj.w / 2, sy - obj.h / 2, obj.w, obj.h, player.x, player.y, PLAYER_R)) {
             obj.used = true;
             multiplier += obj.boost;
-            runScore += Math.round(25 * multiplier);
-            flashOverlay(`x${multiplier.toFixed(1)}`, 'Multiplier Up');
+            const gain = Math.round(35 * multiplier);
+            runScore += gain;
+            addFloater(`x${multiplier.toFixed(1)}`, obj.x, sy, '#a855f7');
+            flashOverlay(`Multiplier x${multiplier.toFixed(1)}`, 'Multiplier Up');
           }
         }
       }
+    }
+
+    function awardDepthScore() {
+      const scoreStep = 25;
+      while (depth >= lastDepthScoreMark + scoreStep) {
+        lastDepthScoreMark += scoreStep;
+        const gain = Math.max(8, Math.round(8 * multiplier));
+        runScore += gain;
+        addFloater(`+${gain}`, player.x + 58, player.y - 18, '#22d3ee');
+      }
+    }
+
+    function addFloater(text, x, y, color) {
+      scoreFloaters.push({ text, x, y, color, life: 0.9 });
+    }
+
+    function updateFloaters(dt) {
+      scoreFloaters = scoreFloaters
+        .map((floater) => ({ ...floater, y: floater.y - 38 * dt, life: floater.life - dt }))
+        .filter((floater) => floater.life > 0);
     }
 
     function cleanupObjects() {
@@ -529,6 +559,8 @@
       drawLanes();
       drawObjects();
       drawPlayer();
+      drawFloaters();
+      drawDepthMeter();
       drawTopGlow();
     }
 
@@ -650,6 +682,28 @@
       ctx.fill();
     }
 
+    function drawFloaters() {
+      ctx.textAlign = 'center';
+      ctx.font = '900 24px Inter, sans-serif';
+      for (const floater of scoreFloaters) {
+        ctx.fillStyle = floater.color.replace(')', `, ${Math.max(0, floater.life)})`).replace('rgb', 'rgba');
+        ctx.globalAlpha = Math.max(0, floater.life);
+        ctx.fillStyle = floater.color;
+        ctx.fillText(floater.text, floater.x, floater.y);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function drawDepthMeter() {
+      ctx.fillStyle = 'rgba(4, 12, 20, 0.72)';
+      roundRect(LEFT_WALL + 18, 18, 190, 54, 16);
+      ctx.fill();
+      ctx.fillStyle = '#9fd3e7';
+      ctx.font = '700 16px Inter, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(`Depth score: +${Math.max(8, Math.round(8 * multiplier))} / 25m`, LEFT_WALL + 34, 52);
+    }
+
     function drawTopGlow() {
       const grad = ctx.createLinearGradient(0, 0, 0, 140);
       grad.addColorStop(0, 'rgba(255,255,255,0.09)');
@@ -677,7 +731,7 @@
         return;
       }
 
-      const secured = Math.round(runScore * multiplier);
+      const secured = Math.round(runScore);
       bankedScore += secured;
       bestBanked = Math.max(bestBanked, bankedScore);
       localStorage.setItem('greedtap-banked', String(bestBanked));
@@ -691,7 +745,7 @@
     function die(message) {
       state = 'dead';
       overlayTitle.textContent = 'Greed killed you';
-      overlayText.textContent = `${message} You lost ${formatNum(Math.round(runScore * multiplier))} unbanked points.`;
+      overlayText.textContent = `${message} You lost ${formatNum(Math.round(runScore))} unbanked points.`;
       overlay.classList.remove('hidden');
       updateHud();
     }
