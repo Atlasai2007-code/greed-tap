@@ -297,6 +297,7 @@
     const HORIZONTAL_SPEED = 305;
     const BOUNCE_LIFT = -145;
     const SEGMENT_HEIGHT = 185;
+    const START_SAFE_TIME = 2.2;
 
     let state = 'idle';
     let raf = null;
@@ -312,6 +313,7 @@
     let multiplier;
     let depth;
     let bestBanked = Number(localStorage.getItem('greedtap-banked') || 0);
+    let spawnShield = 0;
 
     function resetGame() {
       player = {
@@ -329,8 +331,11 @@
       runScore = 0;
       multiplier = 1;
       depth = 0;
+      spawnShield = START_SAFE_TIME;
       state = 'playing';
-      hideOverlay();
+      overlayTitle.textContent = 'Learn the loop';
+      overlayText.textContent = 'Yellow = points. Purple = multiplier. Green = bank. Red = death.';
+      overlay.classList.remove('hidden');
       ensureSegments(H + 700);
       updateHud();
       lastTime = 0;
@@ -346,6 +351,40 @@
     }
 
     function spawnSegment(y) {
+      const segmentIndex = Math.round((y - 120) / SEGMENT_HEIGHT);
+
+      if (segmentIndex === 0) {
+        objects.push({ type: 'coin', x: W / 2 - 90, y: y + 35, r: 16, taken: false });
+        objects.push({ type: 'coin', x: W / 2, y: y + 68, r: 16, taken: false });
+        objects.push({ type: 'coin', x: W / 2 + 90, y: y + 101, r: 16, taken: false });
+        return;
+      }
+
+      if (segmentIndex === 1) {
+        objects.push({
+          type: 'gate',
+          x: W / 2,
+          y: y + 86,
+          w: 190,
+          h: 20,
+          boost: 0.5,
+          used: false,
+        });
+        return;
+      }
+
+      if (segmentIndex === 2) {
+        objects.push({
+          type: 'cash',
+          x: W / 2,
+          y: y + 96,
+          r: 32,
+        });
+        objects.push({ type: 'coin', x: W / 2 - 110, y: y + 52, r: 15, taken: false });
+        objects.push({ type: 'coin', x: W / 2 + 110, y: y + 52, r: 15, taken: false });
+        return;
+      }
+
       const dangerWidth = 130 + Math.random() * 120;
       const dangerX = 120 + Math.random() * (W - 240);
       const gateX = 120 + Math.random() * (W - 240);
@@ -362,13 +401,15 @@
         });
       }
 
-      objects.push({
-        type: 'danger',
-        x: dangerX,
-        y: y + 122,
-        w: dangerWidth,
-        h: 18,
-      });
+      if (segmentIndex >= 3) {
+        objects.push({
+          type: 'danger',
+          x: dangerX,
+          y: y + 122,
+          w: dangerWidth,
+          h: 18,
+        });
+      }
 
       objects.push({
         type: 'gate',
@@ -380,7 +421,7 @@
         used: false,
       });
 
-      if (Math.random() < 0.34) {
+      if (Math.random() < 0.38) {
         objects.push({
           type: 'cash',
           x: cashX,
@@ -402,6 +443,10 @@
 
     function update(dt) {
       player.pulse += dt * 7;
+      spawnShield = Math.max(0, spawnShield - dt);
+      if (spawnShield <= START_SAFE_TIME - 1.5 && state === 'playing') {
+        hideOverlay();
+      }
       player.vy += GRAVITY * dt;
       player.x += player.vx * dt;
       player.y += player.vy * dt;
@@ -444,7 +489,7 @@
         }
 
         if (obj.type === 'danger') {
-          if (rectCircleHit(obj.x - obj.w / 2, sy - obj.h / 2, obj.w, obj.h, player.x, player.y, PLAYER_R)) {
+          if (spawnShield <= 0 && rectCircleHit(obj.x - obj.w / 2, sy - obj.h / 2, obj.w, obj.h, player.x, player.y, PLAYER_R)) {
             die('You hit a red trap.');
             return;
           }
@@ -583,6 +628,14 @@
 
     function drawPlayer() {
       const pulse = 1 + Math.sin(player.pulse) * 0.05;
+      if (spawnShield > 0) {
+        ctx.strokeStyle = `rgba(52, 211, 153, ${0.18 + (spawnShield / START_SAFE_TIME) * 0.35})`;
+        ctx.lineWidth = 7;
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, PLAYER_R + 14, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
       ctx.fillStyle = '#22d3ee';
       ctx.shadowColor = 'rgba(34,211,238,0.7)';
       ctx.shadowBlur = 30;
@@ -617,6 +670,7 @@
 
     function cashOut() {
       if (state !== 'playing') return;
+      hideOverlay();
       const nearbyCash = objects.some((obj) => obj.type === 'cash' && distance(player.x, player.y, obj.x, worldToScreen(obj.y)) < PLAYER_R + obj.r + 18);
       if (!nearbyCash) {
         flashOverlay('Touch green ring first', 'No Cash Out');
