@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Greed Tap</title>
+  <style>
+    :root {
+      --bg: #071018;
+      --panel: rgba(10, 20, 32, 0.92);
+      --text: #f2f7ff;
+      --muted: #9ab0c9;
+      --gold: #fbbf24;
+      --red: #fb7185;
+      --green: #34d399;
+      --cyan: #22d3ee;
+      --purple: #a855f7;
+      --wall: #112132;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      background: radial-gradient(circle at top, #122235 0%, #071018 55%, #040911 100%);
+      color: var(--text);
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    .app {
+      width: min(96vw, 520px);
+      background: var(--panel);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 24px;
+      padding: 16px;
+      box-shadow: 0 25px 80px rgba(0,0,0,.35);
+      backdrop-filter: blur(10px);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.8rem, 4vw, 2.5rem);
+      letter-spacing: -0.03em;
+    }
+
+    .subtitle {
+      margin-top: 6px;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 0.97rem;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .stat {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px;
+      padding: 10px;
+    }
+
+    .label {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+
+    .value {
+      font-size: 1.15rem;
+      font-weight: 800;
+    }
+
+    .shaft-wrap {
+      position: relative;
+      border-radius: 24px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: #09121d;
+    }
+
+    canvas {
+      width: 100%;
+      aspect-ratio: 10 / 16;
+      display: block;
+      touch-action: manipulation;
+      background: linear-gradient(180deg, #102033 0%, #09121d 100%);
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 24px;
+      background: linear-gradient(rgba(3,8,16,.22), rgba(3,8,16,.72));
+      pointer-events: none;
+    }
+
+    .overlay.hidden { display: none; }
+
+    .overlay-box {
+      background: rgba(5, 10, 18, 0.84);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 24px;
+      padding: 18px;
+      max-width: 420px;
+    }
+
+    .overlay h2 {
+      margin: 0 0 8px;
+      font-size: 1.8rem;
+    }
+
+    .overlay p {
+      margin: 8px 0;
+      color: #d2ddf0;
+      line-height: 1.5;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      appearance: none;
+      border: none;
+      border-radius: 16px;
+      padding: 13px 16px;
+      font-weight: 800;
+      cursor: pointer;
+      color: white;
+    }
+
+    #startBtn {
+      background: linear-gradient(135deg, var(--purple), #7c3aed);
+      flex: 1;
+    }
+
+    #cashOutBtn {
+      background: linear-gradient(135deg, var(--green), #10b981);
+      min-width: 150px;
+    }
+
+    .tips {
+      margin-top: 12px;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 0.94rem;
+    }
+
+    @media (max-width: 540px) {
+      .stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>Greed Tap</h1>
+    <div class="subtitle">
+      Tap left or right to bounce down the shaft. Grab coins, pass multiplier gates, and cash out before greed kills you.
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="label">Banked</div><div class="value" id="banked">0</div></div>
+      <div class="stat"><div class="label">Run Score</div><div class="value" id="runScore">0</div></div>
+      <div class="stat"><div class="label">Multiplier</div><div class="value" id="multiplier">1.0x</div></div>
+      <div class="stat"><div class="label">Depth</div><div class="value" id="depth">0m</div></div>
+    </div>
+
+    <div class="shaft-wrap">
+      <canvas id="game" width="500" height="820"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-box">
+          <h2 id="overlayTitle">Tap Start</h2>
+          <p id="overlayText">Tap left or right side of the shaft to bounce. Hit cash out to secure the run. If you die, unbanked score is gone.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="startBtn">Start / Restart</button>
+      <button id="cashOutBtn">Cash Out</button>
+    </div>
+
+    <div class="tips">
+      Yellow = coins · Purple = multiplier gates · Red = death · Green portal = cash-out zone. The deeper you go, the more everything is worth.
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const overlay = document.getElementById('overlay');
+    const overlayTitle = document.getElementById('overlayTitle');
+    const overlayText = document.getElementById('overlayText');
+    const startBtn = document.getElementById('startBtn');
+    const cashOutBtn = document.getElementById('cashOutBtn');
+    const bankedEl = document.getElementById('banked');
+    const runScoreEl = document.getElementById('runScore');
+    const multiplierEl = document.getElementById('multiplier');
+    const depthEl = document.getElementById('depth');
+
+    const W = canvas.width;
+    const H = canvas.height;
+    const LEFT_WALL = 52;
+    const RIGHT_WALL = W - 52;
+    const PLAYER_R = 13;
+    const GRAVITY = 980;
+    const HORIZONTAL_SPEED = 250;
+    const JUMP_BOOST = -130;
+    const SEGMENT_HEIGHT = 170;
+
+    let state = 'idle';
+    let raf = null;
+    let lastTime = 0;
+
+    let player;
+    let worldY;
+    let nextSegmentY;
+    let objects;
+    let bankedScore;
+    let runScore;
+    let multiplier;
+    let depth;
+    let bestBanked;
+
+    bestBanked = Number(localStorage.getItem('greedtap-banked') || 0);
+
+    function resetGame() {
+      player = {
+        x: W / 2,
+        y: 170,
+        vx: HORIZONTAL_SPEED,
+        vy: 40,
+        alive: true,
+        pulse: 0,
+      };
+      worldY = 0;
+      nextSegmentY = 120;
+      objects = [];
+      bankedScore = bestBanked;
+      runScore = 0;
+      multiplier = 1;
+      depth = 0;
+      state = 'playing';
+      overlay.classList.add('hidden');
+      ensureSegments(H + 600);
+      updateHud();
+      lastTime = 0;
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(loop);
+    }
+
+    function ensureSegments(targetWorldY) {
+      while (nextSegmentY < targetWorldY) {
+        spawnSegment(nextSegmentY);
+        nextSegmentY += SEGMENT_HEIGHT;
+      }
+    }
+
+    function spawnSegment(y) {
+      const dangerX = 110 + Math.random() * (W - 220);
+      const coinCount = 2 + Math.floor(Math.random() * 3);
+
+      for (let i = 0; i < coinCount; i++) {
+        objects.push({
+          type: 'coin',
+          x: 100 + Math.random() * (W - 200),
+          y: y + 30 + i * 34 + Math.random() * 26,
+          r: 10,
+          taken: false,
+        });
+      }
+
+      if (Math.random() < 0.85) {
+        objects.push({
+          type: 'danger',
+          x: dangerX,
+          y: y + 110,
+          w: 90 + Math.random() * 90,
+          h: 14,
+        });
+      }
+
+      if (Math.random() < 0.6) {
+        objects.push({
+          type: 'gate',
+          x: 90 + Math.random() * (W - 180),
+          y: y + 72,
+          w: 120,
+          h: 16,
+          boost: 0.25 + Math.random() * 0.35,
+          used: false,
+        });
+      }
+
+      if (Math.random() < 0.28) {
+        objects.push({
+          type: 'cash',
+          x: 110 + Math.random() * (W - 220),
+          y: y + 132,
+          r: 18,
+        });
+      }
+    }
+
+    function loop(ts) {
+      if (!lastTime) lastTime = ts;
+      const dt = Math.min(0.033, (ts - lastTime) / 1000);
+      lastTime = ts;
+
+      if (state === 'playing') update(dt);
+      render();
+      raf = requestAnimationFrame(loop);
+    }
+
+    function update(dt) {
+      player.pulse += dt * 8;
+      player.vy += GRAVITY * dt;
+      player.x += player.vx * dt;
+      player.y += player.vy * dt;
+
+      if (player.x <= LEFT_WALL + PLAYER_R) {
+        player.x = LEFT_WALL + PLAYER_R;
+        player.vx = HORIZONTAL_SPEED;
+      } else if (player.x >= RIGHT_WALL - PLAYER_R) {
+        player.x = RIGHT_WALL - PLAYER_R;
+        player.vx = -HORIZONTAL_SPEED;
+      }
+
+      const followTarget = 210;
+      if (player.y > followTarget) {
+        const shift = player.y - followTarget;
+        player.y = followTarget;
+        worldY += shift;
+      }
+
+      depth = Math.floor(worldY / 10);
+      ensureSegments(worldY + H + 500);
+      updateObjects();
+      cleanupObjects();
+      updateHud();
+
+      if (player.y < -80) {
+        player.vy = 50;
+      }
+
+      if (worldY > 3000) {
+        multiplier += 0.0025;
+      }
+    }
+
+    function updateObjects() {
+      for (const obj of objects) {
+        if (obj.type === 'coin' && !obj.taken) {
+          if (circleHit(player.x, worldToScreen(obj.y, obj), obj.x, player.y, PLAYER_R + obj.r)) {
+            obj.taken = true;
+            runScore += Math.round(10 * multiplier);
+          }
+        }
+
+        if (obj.type === 'danger') {
+          const sy = worldToScreen(obj.y, obj);
+          if (rectCircleHit(obj.x - obj.w / 2, sy - obj.h / 2, obj.w, obj.h, player.x, player.y, PLAYER_R)) {
+            die('You held for one greedy move too many.');
+            return;
+          }
+        }
+
+        if (obj.type === 'gate' && !obj.used) {
+          const sy = worldToScreen(obj.y, obj);
+          if (rectCircleHit(obj.x - obj.w / 2, sy - obj.h / 2, obj.w, obj.h, player.x, player.y, PLAYER_R)) {
+            obj.used = true;
+            multiplier += obj.boost;
+            runScore += Math.round(20 * multiplier);
+          }
+        }
+      }
+    }
+
+    function cleanupObjects() {
+      objects = objects.filter((obj) => {
+        const sy = worldToScreen(obj.y, obj);
+        return sy > -160 && sy < H + 200 && !(obj.type === 'coin' && obj.taken);
+      });
+    }
+
+    function updateHud() {
+      bankedEl.textContent = formatNum(bankedScore);
+      runScoreEl.textContent = formatNum(runScore);
+      multiplierEl.textContent = `${multiplier.toFixed(1)}x`;
+      depthEl.textContent = `${depth}m`;
+      cashOutBtn.disabled = state !== 'playing';
+      cashOutBtn.style.opacity = state === 'playing' ? '1' : '.5';
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, W, H);
+      drawBackground();
+      drawWalls();
+      drawObjects();
+      drawPlayer();
+      drawDangerGlow();
+    }
+
+    function drawBackground() {
+      const grad = ctx.createLinearGradient(0, 0, 0, H);
+      grad.addColorStop(0, '#122235');
+      grad.addColorStop(1, '#09121d');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+      for (let y = -40; y < H + 40; y += 55) {
+        ctx.beginPath();
+        ctx.moveTo(LEFT_WALL, y + (worldY * 0.15) % 55);
+        ctx.lineTo(RIGHT_WALL, y + (worldY * 0.15) % 55);
+        ctx.stroke();
+      }
+    }
+
+    function drawWalls() {
+      ctx.fillStyle = '#112132';
+      ctx.fillRect(0, 0, LEFT_WALL, H);
+      ctx.fillRect(RIGHT_WALL, 0, W - RIGHT_WALL, H);
+
+      ctx.fillStyle = 'rgba(255,255,255,0.06)';
+      ctx.fillRect(LEFT_WALL - 3, 0, 3, H);
+      ctx.fillRect(RIGHT_WALL, 0, 3, H);
+    }
+
+    function drawObjects() {
+      for (const obj of objects) {
+        const sy = worldToScreen(obj.y, obj);
+
+        if (obj.type === 'coin' && !obj.taken) {
+          ctx.fillStyle = '#fbbf24';
+          ctx.shadowColor = 'rgba(251,191,36,0.45)';
+          ctx.shadowBlur = 14;
+          ctx.beginPath();
+          ctx.arc(obj.x, sy, obj.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+
+        if (obj.type === 'danger') {
+          ctx.fillStyle = '#fb7185';
+          ctx.shadowColor = 'rgba(251,113,133,0.45)';
+          ctx.shadowBlur = 16;
+          roundRect(obj.x - obj.w / 2, sy - obj.h / 2, obj.w, obj.h, 8);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+
+        if (obj.type === 'gate') {
+          ctx.fillStyle = obj.used ? 'rgba(168,85,247,0.28)' : '#a855f7';
+          ctx.shadowColor = 'rgba(168,85,247,0.45)';
+          ctx.shadowBlur = 16;
+          roundRect(obj.x - obj.w / 2, sy - obj.h / 2, obj.w, obj.h, 8);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+
+          ctx.fillStyle = '#f5ebff';
+          ctx.font = 'bold 12px Inter, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(`+${obj.boost.toFixed(1)}x`, obj.x, sy + 4);
+        }
+
+        if (obj.type === 'cash') {
+          ctx.strokeStyle = '#34d399';
+          ctx.lineWidth = 5;
+          ctx.shadowColor = 'rgba(52,211,153,0.4)';
+          ctx.shadowBlur = 16;
+          ctx.beginPath();
+          ctx.arc(obj.x, sy, obj.r + 10 + Math.sin((performance.now() + obj.y) / 120) * 2, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+        }
+      }
+    }
+
+    function drawPlayer() {
+      ctx.fillStyle = '#22d3ee';
+      ctx.shadowColor = 'rgba(34,211,238,0.45)';
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, PLAYER_R + Math.sin(player.pulse) * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    function drawDangerGlow() {
+      const alpha = Math.min(0.14, multiplier * 0.02);
+      ctx.fillStyle = `rgba(251, 113, 133, ${alpha})`;
+      ctx.fillRect(LEFT_WALL, 0, RIGHT_WALL - LEFT_WALL, H);
+    }
+
+    function worldToScreen(y) {
+      return y - worldY;
+    }
+
+    function bounce(direction) {
+      if (state !== 'playing') return;
+      player.vx = direction === 'left' ? -HORIZONTAL_SPEED : HORIZONTAL_SPEED;
+      player.vy = Math.min(player.vy, 420) + JUMP_BOOST;
+    }
+
+    function cashOut() {
+      if (state !== 'playing') return;
+      const nearbyCash = objects.some((obj) => obj.type === 'cash' && distance(player.x, player.y, obj.x, worldToScreen(obj.y)) < PLAYER_R + obj.r + 16);
+      if (!nearbyCash) {
+        overlayTitle.textContent = 'No portal';
+        overlayText.textContent = 'You can only cash out when you touch a green cash-out portal.';
+        overlay.classList.remove('hidden');
+        setTimeout(() => {
+          if (state === 'playing') overlay.classList.add('hidden');
+        }, 900);
+        return;
+      }
+
+      const secured = Math.round(runScore * multiplier);
+      bankedScore += secured;
+      bestBanked = Math.max(bestBanked, bankedScore);
+      localStorage.setItem('greedtap-banked', String(bestBanked));
+      overlayTitle.textContent = 'Banked';
+      overlayText.textContent = `You secured ${formatNum(secured)} points. Run it back and go deeper.`;
+      state = 'banked';
+      overlay.classList.remove('hidden');
+      updateHud();
+    }
+
+    function die(message) {
+      state = 'dead';
+      overlayTitle.textContent = 'Greed killed you';
+      overlayText.textContent = `${message} You lost ${formatNum(Math.round(runScore * multiplier))} unbanked points.`;
+      overlay.classList.remove('hidden');
+      updateHud();
+    }
+
+    function startOrRestart() {
+      resetGame();
+    }
+
+    function distance(x1, y1, x2, y2) {
+      return Math.hypot(x2 - x1, y2 - y1);
+    }
+
+    function circleHit(x1, y1, x2, y2, r) {
+      return distance(x1, y1, x2, y2) <= r;
+    }
+
+    function rectCircleHit(rx, ry, rw, rh, cx, cy, cr) {
+      const nx = Math.max(rx, Math.min(cx, rx + rw));
+      const ny = Math.max(ry, Math.min(cy, ry + rh));
+      return distance(cx, cy, nx, ny) < cr;
+    }
+
+    function roundRect(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    function formatNum(n) {
+      return new Intl.NumberFormat().format(n);
+    }
+
+    canvas.addEventListener('pointerdown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      bounce(x < rect.width / 2 ? 'left' : 'right');
+    });
+
+    startBtn.addEventListener('click', startOrRestart);
+    cashOutBtn.addEventListener('click', cashOut);
+
+    updateHud();
+    render();
+  </script>
+</body>
+</html>
